@@ -1,0 +1,1206 @@
+---
+output:
+  html_document:
+    theme: cosmo
+    highlight: null
+    toc: true
+    toc_float:
+      collapsed: false
+      smooth_scroll: true
+    toc_depth: 3
+    css: "C:/Users/Acer/Downloads/stylee.css"
+---
+<div class="hero-banner">
+  <h1>🏎 Formula 1 Race Analysis</h1>
+  <p>Exploratory Data Analysis of Formula 1 History</p>
+</div>
+
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap" rel="stylesheet">
+
+
+
+
+```{r library_activaions, warning=F, error=F, message=F, include=FALSE}
+library(pacman)
+
+p_load(
+  data.table, dplyr, readxl, readr, lubridate, xlsx, httr, openxlsx,
+  janitor, stringr, RODBC, RMariaDB, jsonlite, ssh, stringdist, reshape2,
+  plotly, shiny, shinythemes, shinydashboard, shinyWidgets, knitr,
+  rmarkdown, evaluate, base64enc, digest, highr, htmltools, xfun,
+  yaml, mime, DT, themes, ggplot2, DBI, taskscheduleR,
+  patchwork, mailR, tidyverse, kableExtra, scales, corrplot,
+  broom, rpart, rpart.plot, pROC, moments, tidyr, corrplot, car, tibble,
+  pROC, e1071, class, rpart.plot, purrr, countrycode,
+  install = FALSE
+)
+```
+
+<hr class="f1-line">
+
+```{r data_import, warning=F, error=F, message=F, include=FALSE}
+circuits             <- read.csv("C:/Users/Acer/Downloads/circuits (1).csv")
+drivers              <- read.csv("C:/Users/Acer/Downloads/drivers.csv")
+races                <- read.csv("C:/Users/Acer/Downloads/races.csv")
+results              <- read.csv("C:/Users/Acer/Downloads/results.csv")
+constructors         <- read.csv("C:/Users/Acer/Downloads/constructors.csv")
+constructor_result   <- read.csv("C:/Users/Acer/Downloads/constructor_results.csv")
+constructor_standing <- read.csv("C:/Users/Acer/Downloads/constructor_standings.csv")
+drivers_standings    <- read.csv("C:/Users/Acer/Downloads/driver_standings.csv")
+lap_times            <- read.csv("C:/Users/Acer/Downloads/lap_times.csv")
+qualifying           <- read.csv("C:/Users/Acer/Downloads/qualifying.csv")
+pit_stops            <- read.csv("C:/Users/Acer/Downloads/pit_stops.csv")
+status               <- read.csv("C:/Users/Acer/Downloads/status.csv")
+```
+
+<hr class="f1-line">
+
+```{r ilkin_baxish, warning=F, error=F, message=F}
+colnames(circuits)
+colnames(drivers)
+colnames(races)
+colnames(results)
+colnames(constructors)
+colnames(constructor_result)
+colnames(constructor_standing)
+colnames(drivers_standings)
+colnames(lap_times)
+colnames(qualifying)
+colnames(pit_stops)
+colnames(status)
+
+colSums(is.na(circuits))
+colSums(is.na(drivers))
+colSums(is.na(races))
+colSums(is.na(results))
+colSums(is.na(constructors))
+colSums(is.na(constructor_result))
+colSums(is.na(constructor_standing))
+colSums(is.na(drivers_standings))
+colSums(is.na(lap_times))
+colSums(is.na(qualifying))
+colSums(is.na(pit_stops))
+colSums(is.na(status))
+```
+
+<hr class="f1-line">
+
+```{r join, warning=F, error=F, message=F}
+main_tab <- results %>%
+  left_join(races,        by = "raceId") %>%
+  left_join(drivers,      by = "driverId") %>%
+  left_join(constructors, by = "constructorId") %>%
+  left_join(status,       by = "statusId")
+```
+
+
+<hr class="f1-line">
+
+# Data Cleaning
+
+```{r data_cleaning, warning=F, error=F, message=F}
+main_tab <- main_tab %>%
+  mutate(across(where(is.character), ~na_if(., "\\N"))) %>%
+  mutate(
+    date            = as.Date(date),
+    dob             = as.Date(dob),
+    points          = as.numeric(points),
+    grid            = as.integer(grid),
+    positionOrder   = as.integer(positionOrder),
+    milliseconds    = as.numeric(milliseconds),
+    fastestLap      = as.integer(fastestLap),
+    rank            = as.integer(rank),
+    fastestLapSpeed = as.numeric(fastestLapSpeed)
+  ) %>%
+  select(-positionText, -position, -fp1_date, -fp1_time, -fp2_date, -fp2_time,
+         -fp3_date, -fp3_time, -quali_date, -quali_time,
+         -sprint_date, -sprint_time, -url.x, -url.y, -url, -number.y, -code)
+
+glimpse(main_tab)
+```
+
+
+
+<hr class="f1-line">
+
+
+# Sürücü Performansının Təhlili
+
+<hr class="f1-line">
+
+## Ən Çox Yarış Qazanan Sürücülər
+
+
+
+
+```{r surucu_performansi, warning=F, error=F, message=F}
+top_winners <- main_tab %>%
+  filter(positionOrder == 1) %>%
+  group_by(forename, surname) %>%
+  summarise(wins = n(), .groups = "drop") %>%
+  arrange(desc(wins)) %>%
+  head(10)
+
+kable(top_winners, caption = "<div style='text-align:center; font-weight:bold; font-size:15px;'>En chox yarish qazanan 10 surucu</div>") %>%
+  kable_styling(bootstrap_options = c("striped", "hover"), full_width = FALSE)
+
+ggplot(top_winners, aes(x = reorder(paste(forename, surname), wins), y = wins)) +
+  geom_col(fill = "#3671C6") +
+  geom_text(aes(label = wins), hjust = -0.2, size = 3.8, fontface = "bold") +
+  coord_flip() +
+  labs(
+    title    = "Ən chox yarish qazanan 10 surucu",
+    subtitle = "1950–2024 mövsümləri əsasında",
+    x        = NULL,
+    y        = "Qazanılan yarış sayı"
+  ) +
+  theme_minimal(base_size = 13) +
+  theme(
+    plot.title         = element_text(hjust = 0.5, face = "bold", size = 14),
+    plot.subtitle      = element_text(hjust = 0.5, color = "gray50", size = 11),
+    panel.grid.minor   = element_blank(),
+    panel.grid.major.y = element_blank()
+  )
+```
+
+> **Şərh:**Təhlil nəticələrinə əsasən, Formula 1 tarixində ən çox yarış qələbəsi qazanan sürücü Lewis Hamiltondur. O, 105 qələbə ilə bütün zamanların rekorduna sahibdir. Michael Schumacher 91 qələbə ilə ikinci, Max Verstappen isə 63 qələbə ilə üçüncü yerdə qərarlaşıb.
+Qrafik Formula 1 tarixində bir neçə sürücünün uzun müddət dominantlıq etdiyini göstərir. Schumacher 2000-ci illərin əvvəllərində, Hamilton isə 2010-cu illər və sonrakı dövrdə idmana damğa vurmuş sürücülər kimi seçilirlər. Max Verstappenin artıq ilk üçlükdə yer alması isə onun müasir Formula 1-dəki üstünlüyünü nümayiş etdirir.
+Ümumilikdə, yarış qələbələrinin sayı sürücünün istedadı ilə yanaşı, çıxış etdiyi komandanın gücü, texniki üstünlük və karyera müddəti ilə də sıx əlaqəlidir. Buna baxmayaraq, siyahıda yer alan bütün sürücülər Formula 1 tarixinin ən uğurlu və nüfuzlu pilotları hesab olunur.
+
+
+<hr class="f1-line">
+
+## Yalnız Bir Qələbəsi Olan Sürücülər
+
+```{r bottom_winners, warning=F, error=F, message=F}
+bottom_winners <- main_tab %>%
+  filter(positionOrder == 1) %>%
+  group_by(forename, surname) %>%
+  summarise(wins = n(), .groups = "drop") %>%
+  filter(wins == 1) %>%
+  arrange(forename)
+
+kable(bottom_winners,
+      caption = "<div style='text-align:center; font-weight:bold; font-size:15px;'>Yalnız 1 qələbəsi olan sürücülər</div>") %>%
+  kable_styling(bootstrap_options = c("striped", "hover"), full_width = FALSE)
+```
+
+> **Şərh:** Formula 1 tarixində bir çox sürücü yalnız bir dəfə yarış qələbəsi əldə edə bilib. Siyahıda yer alan Alessandro Nannini, Esteban Ocon, Heikki Kovalainen və Jarno Trulli kimi sürücülər karyeraları ərzində yalnız bir Qran Pri qələbəsi qazanıblar.
+Bu nəticə Formula 1-də qələbə qazanmağın nə qədər çətin olduğunu göstərir. Hətta yüksək səviyyəli sürücülər belə uyğun komanda, rəqabətədavamlı bolid və əlverişli yarış şəraiti olmadan ardıcıl uğur əldə etməkdə çətinlik çəkirlər.
+Bununla yanaşı, yalnız bir qələbəyə sahib olmaq həmin sürücülərin uğursuz olduğunu göstərmir. Əksinə, Formula 1 tarixində yarış qələbəsi əldə etmiş hər bir pilot idmanın ən yüksək səviyyəsində mühüm nailiyyət qazanmış hesab olunur. Bəzi hallarda isə bu qələbələr gözlənilməz strategiyalar, hava şəraiti və ya xüsusi yarış hadisələri nəticəsində əldə edilmişdir.
+
+
+
+<hr class="f1-line">
+
+## DNF (Do Not Finish) Təhlili
+
+
+
+```{r dnf_analysis, warning=F, error=F, message=F, fig.width=12, fig.height=5}
+# Hər sürücünün ümumi start sayı
+driver_starts <- main_tab %>%
+  group_by(forename, surname) %>%
+  summarise(total_starts = n(), .groups = "drop")
+
+# DNF faizi ilə normalizasiya edilmiş siyahı (min. 50 start)
+dnf_drivers <- main_tab %>%
+  filter(status != "Finished") %>%
+  group_by(forename, surname) %>%
+  summarise(dnf_count = n(), .groups = "drop") %>%
+  left_join(driver_starts, by = c("forename", "surname")) %>%
+  mutate(dnf_rate = round(100 * dnf_count / total_starts, 1)) %>%
+  filter(total_starts >= 50) %>%
+  arrange(desc(dnf_rate)) %>%
+  head(10)
+
+kable(dnf_drivers,
+      col.names = c("Ad", "Soyad", "DNF sayı", "Ümumi start", "DNF faizi (%)"),
+      caption = "<div style='text-align:center; font-weight:bold; font-size:15px;'>Ən yüksək DNF faizinə malik sürücülər (min. 50 start)</div>") %>%
+  kable_styling(bootstrap_options = c("striped", "hover"), full_width = FALSE)
+
+ggplot(dnf_drivers, aes(x = reorder(paste(forename, surname), dnf_rate), y = dnf_rate)) +
+  geom_col(fill = "#DC0000") +
+  geom_text(aes(label = paste0(dnf_rate, "%")), hjust = -0.2, size = 3.8, fontface = "bold") +
+  coord_flip() +
+  labs(
+    title    = "Ən yüksək DNF faizinə malik sürücülər",
+    subtitle = "Min. 50 start şərti ilə, 1950–2024",
+    x        = NULL,
+    y        = "DNF faizi (%)"
+  ) +
+  theme_minimal(base_size = 13) +
+  theme(
+    plot.title         = element_text(hjust = 0.5, face = "bold", size = 14),
+    plot.subtitle      = element_text(hjust = 0.5, color = "gray50", size = 11),
+    panel.grid.minor   = element_blank(),
+    panel.grid.major.y = element_blank()
+  )
+
+# Mütləq DNF sayı (müqayisə üçün)
+dnf_raw_top <- main_tab %>%
+  filter(status != "Finished") %>%
+  group_by(forename, surname) %>%
+  summarise(dnf_count = n(), .groups = "drop") %>%
+  left_join(driver_starts, by = c("forename", "surname")) %>%
+  arrange(desc(dnf_count)) %>%
+  head(10)
+
+kable(dnf_raw_top,
+      col.names = c("Ad", "Soyad", "DNF sayı", "Ümumi start"),
+      caption = "<div style='text-align:center; font-weight:bold; font-size:15px;'>Ən çox sayda DNF olan sürücülər (mütləq say)</div>") %>%
+  kable_styling(bootstrap_options = c("striped", "hover"), full_width = FALSE)
+```
+
+> **Şərh:** DNF analizini iki üsulla apardıq: mütləq say və normalizasiya edilmiş faiz.
+>
+> **Mütləq say** baxımından Andrea de Cesaris, Riccardo Patrese kimi sürücülər yüksək görünür — amma bu, onların uzun karyerasının nəticəsidir (200+ start). Buna görə əsl "etibarsızlıq" göstəricisi üçün **DNF faizi** (min. 50 start şərti ilə) daha düzgün meyardır.
+>
+> Normalizasiya edilmiş siyahıda 1950–60-cı illərin sürücüləri öndədir — həmin dövrün texnologiyası mexaniki nasazlığa çox meylli idi. Müasir sürücülərin DNF faizinin daha aşağı olması Formula 1-in texniki etibarlılıq baxımından nə qədər inkişaf etdiyini göstərir.
+
+
+
+
+<hr class="f1-line">
+
+## Milliyyətlər Üzrə Sürücü Paylanması
+
+
+```{r nationality_analysis, warning=F, error=F, message=F}
+nationality_count_top <- main_tab %>%
+  distinct(driverId, nationality.x) %>%
+  group_by(nationality.x) %>%
+  summarise(driver_count = n(), .groups = "drop") %>%
+  arrange(desc(driver_count)) %>%
+  head(10)
+
+kable(nationality_count_top, caption = "<div style='text-align:center; font-weight:bold; font-size:15px;'>Milliyyət uzre surucu sayi (top 10)</div>") %>%
+  kable_styling(bootstrap_options = c("striped", "hover"), full_width = FALSE)
+
+ggplot(nationality_count_top, aes(x = reorder(nationality.x, driver_count), y = driver_count)) +
+  geom_col(fill = "#FF8000") +
+  geom_text(aes(label = driver_count), hjust = -0.2, size = 3.8, fontface = "bold") +
+  coord_flip() +
+  labs(
+    title    = "Milliyyət uzre F1 surucu sayi",
+    subtitle = "Top 10 milliyyət",
+    x        = NULL,
+    y        = "Sürücü sayı"
+  ) +
+  theme_minimal(base_size = 13) +
+  theme(
+    plot.title         = element_text(hjust = 0.5, face = "bold", size = 14),
+    plot.subtitle      = element_text(hjust = 0.5, color = "gray50", size = 11),
+    panel.grid.minor   = element_blank(),
+    panel.grid.major.y = element_blank()
+  )
+
+nationality_count_bottom <- main_tab %>%
+  distinct(driverId, nationality.x) %>%
+  group_by(nationality.x) %>%
+  summarise(driver_count = n(), .groups = "drop") %>%
+  arrange(driver_count) %>%
+  head(10)
+
+kable(nationality_count_bottom, caption = "<div style='text-align:center; font-weight:bold; font-size:15px;'>Ən az təmsil olunan milliyyətlər</div>") %>%
+  kable_styling(bootstrap_options = c("striped", "hover"), full_width = FALSE)
+```
+
+> **Şərh1:** (Milliyyətlər Üzrə Sürücü Sayı)
+Təhlil göstərir ki, Formula 1 tarixində ən çox təmsil olunan milliyyət britaniyalılardır. Ümumilikdə 166 britaniyalı sürücü Formula 1-də iştirak edib. ABŞ (158) və İtaliya (99) da yüksək göstəricilərlə ilk sıralarda yer alır.
+Bu nəticələr Formula 1-in yaranma və inkişaf mərhələsində Böyük Britaniya, ABŞ və İtaliyanın idmanda mühüm rol oynadığını göstərir. Xüsusilə Böyük Britaniya həm sürücülərin, həm də komandaların sayı baxımından Formula 1-in əsas mərkəzlərindən biri hesab olunur.
+
+
+
+> **Şərh2:** (Ən Az Təmsil Olunan Milliyyətlər)
+Bəzi milliyyətlər Formula 1 tarixində yalnız bir sürücü ilə təmsil olunub. Çinli, İndoneziyalı, Malayziyalı və Lixtenşteynli sürücülər bu kateqoriyaya daxildir. Bu göstərici həmin ölkələrin Formula 1-də məhdud iştirak etdiyini göstərir.
+Bunun əsas səbəbləri arasında avtomobil idmanlarının həmin ölkələrdə kifayət qədər inkişaf etməməsi, maliyyə imkanları və Formula 1-ə yüksəlmək üçün tələb olunan infrastrukturun məhdudluğu göstərilə bilər.
+**Ümumi Nəticə**
+Milliyyətlər üzrə təhlil Formula 1-in tarixən əsasən Avropa və Şimali Amerika ölkələrinin üstünlük təşkil etdiyi bir idman növü olduğunu göstərir. Bununla belə, son illərdə Asiya, Yaxın Şərq və digər regionlardan olan sürücülərin sayının artması Formula 1-in daha qlobal xarakter aldığını nümayiş etdirir.
+
+
+<hr class="f1-line">
+
+
+## Ən Uzun Karyeraya Sahib Sürücülər
+
+
+```{r career_length, warning=F, error=F, message=F}
+career_length <- main_tab %>%
+  group_by(forename, surname) %>%
+  summarise(
+    first_race = min(date),
+    last_race  = max(date),
+    years      = round(as.numeric(difftime(max(date), min(date), units = "days")) / 365, 2),
+    .groups    = "drop"
+  ) %>%
+  arrange(desc(years)) %>%
+  head(10)
+
+kable(career_length, caption = "<div style='text-align:center; font-weight:bold; font-size:15px;'>Ən uzun karyera</div>") %>%
+  kable_styling(bootstrap_options = c("striped", "hover"), full_width = FALSE)
+```
+
+> **Şərh:**Təhlil göstərir ki, Formula 1 tarixində ən uzun karyeraya malik sürücü Fernando Alonso olub. Alonso ilk yarışına 2001-ci ildə çıxıb və 2024-cü ilə qədər yarışaraq təxminən 24 illik karyera formalaşdırıb. Michael Schumacher və Kimi Räikkönen də 20 ildən artıq davam edən karyeraları ilə siyahının ön sıralarında yer alırlar.
+Cədvəldə yer alan sürücülərin əksəriyyəti Formula 1 tarixinin ən təcrübəli və uğurlu pilotları hesab olunur. Uzunmüddətli karyera yalnız yüksək sürücülük bacarığı deyil, həm də fiziki hazırlıq, adaptasiya qabiliyyəti və illər boyu rəqabətədavamlı qalmaq bacarığı tələb edir.
+
+<hr class="f1-line">
+
+# Komandaların Performans Təhlili
+
+<hr class="f1-line">
+
+
+## Ən Çox Yarış Qazanan Komandalar
+
+```{r constructor_wins, warning=F, error=F, message=F}
+constructor_top <- main_tab %>%
+  filter(positionOrder == 1) %>%
+  group_by(name.y) %>%
+  summarise(wins = n(), .groups = "drop") %>%
+  arrange(desc(wins)) %>%
+  head(10)
+
+kable(constructor_top, caption = "<div style='text-align:center; font-weight:bold; font-size:15px;'>Ən chox yarış qazanan top 10 komanda</div>") %>%
+  kable_styling(bootstrap_options = c("striped", "hover"), full_width = FALSE)
+
+ggplot(constructor_top, aes(x = reorder(name.y, wins), y = wins)) +
+  geom_col(fill = "#3671C6") +
+  geom_text(aes(label = wins), hjust = -0.2, size = 3.8, fontface = "bold") +
+  coord_flip() +
+  labs(
+    title    = "Ən chox yarış qazanan top 10 komanda",
+    subtitle = "1950–2024 mövsümləri əsasında",
+    x        = NULL,
+    y        = "Qələbə sayı"
+  ) +
+  theme_minimal(base_size = 13) +
+  theme(
+    plot.title         = element_text(hjust = 0.5, face = "bold", size = 14),
+    plot.subtitle      = element_text(hjust = 0.5, color = "gray50", size = 11),
+    panel.grid.minor   = element_blank(),
+    panel.grid.major.y = element_blank()
+  )
+
+constructor_bottom <- main_tab %>%
+  filter(positionOrder == 1) %>%
+  group_by(name.y) %>%
+  summarise(wins = n(), .groups = "drop") %>%
+  arrange(wins) %>%
+  head(10)
+
+kable(constructor_bottom, caption = "<div style='text-align:center; font-weight:bold; font-size:15px;'>Ən az yarış qazanan komandalar</div>") %>%
+  kable_styling(bootstrap_options = c("striped", "hover"), full_width = FALSE)
+```
+
+> **Şərh1:** (Ən Çox Yarış Qazanan Komandalar)
+Təhlil nəticələrinə görə, Formula 1 tarixində ən çox yarış qələbəsi qazanan komanda Ferrari-dir. Ferrari 249 qələbə ilə digər bütün komandaları qabaqlayır və bu göstərici onun idmanın ən uğurlu komandası olduğunu göstərir. McLaren və Mercedes də yüksək qələbə sayları ilə Formula 1 tarixində mühüm yer tutur.
+Qrafikdən görünür ki, Ferrari ilə digər komandalar arasında nəzərəçarpacaq fərq mövcuddur. Red Bull nisbətən daha qısa tarixə malik olmasına baxmayaraq, artıq 122 qələbə əldə edərək ən uğurlu komandalar sırasına daxil olub.
+
+
+> **Şərh2:** (Ən Az Yarış Qazanan Komandalar)
+Siyahıda yer alan komandaların hər biri Formula 1 tarixində yalnız bir yarış qələbəsi qazanıb. Bu komandaların əksəriyyəti ya qısa müddət fəaliyyət göstərib, ya da məhdud resurslarla yarışdığı üçün davamlı uğur əldə edə bilməyib.
+Bu nəticələr Formula 1-də uzunmüddətli uğurun yalnız bir yarış qələbəsi ilə deyil, illər ərzində sabit performans və güclü texniki inkişafla mümkün olduğunu göstərir.
+
+
+
+<hr class="f1-line">
+
+## McLaren, Ferrari və Red Bull Komandalarının Xal Müqayisəsi
+
+
+```{r team_comparison, warning=F, error=F, message=F}
+team_points_yearly <- main_tab %>%
+  filter(name.y %in% c("Ferrari", "McLaren", "Red Bull")) %>%
+  group_by(year, name.y) %>%
+  summarise(total_points = sum(points, na.rm = TRUE), .groups = "drop")
+
+
+ggplot(team_points_yearly %>% filter(year >= 1980),
+       aes(x = year, y = total_points, color = name.y)) +
+  geom_line(linewidth = 1.4, alpha = 0.4) +
+  scale_color_manual(values = c(
+    "Ferrari"  = "#DC0000",
+    "McLaren"  = "#FF8000",
+    "Red Bull" = "#3671C6"
+  )) +
+  scale_x_continuous(breaks = seq(1980, 2024, 6)) +
+  labs(
+    title    = "McLaren vs Ferrari vs Red Bull — illər uzre xal muqayisesi",
+    subtitle = "1980–2024 mövsümləri əsasında",
+    x        = NULL,
+    y        = "Toplam xal",
+    color    = NULL
+  ) +
+  theme_minimal(base_size = 13) +
+  theme(
+    plot.title       = element_text(hjust = 0.5, face = "bold", size = 14),
+    plot.subtitle    = element_text(hjust = 0.5, color = "gray50", size = 11),
+    legend.position  = "top",
+    panel.grid.minor = element_blank()
+  )
+```
+
+> **Şərh:** (McLaren, Ferrari və Red Bull Komandalarının Xal Müqayisəsi)
+Qrafik göstərir ki, müxtəlif dövrlərdə fərqli komandalar Formula 1-də dominant mövqe tutublar. Ferrari uzun illər ərzində sabit performans nümayiş etdirərək demək olar ki, bütün dövrlərdə yüksək xal toplamağı bacarıb. McLaren xüsusilə 1980-ci illərin sonu və 1990-cı illərdə güclü nəticələr əldə edib.
+Red Bull isə Formula 1-ə digər iki komanda ilə müqayisədə daha gec qoşulmasına baxmayaraq, 2010-cu illərdən etibarən sürətlə yüksələrək ən dominant komandalardan birinə çevrilib. Xüsusilə 2021–2023-cü illərdə Red Bull-un topladığı xallar digər komandaların göstəricilərini üstələyib.
+Ümumilikdə, qrafik Formula 1 tarixində komanda üstünlüyünün zamanla dəyişdiyini və müxtəlif dövrlərdə Ferrari, McLaren və Red Bull-un idmana rəhbərlik etdiyini göstərir. Bu dəyişikliklər texnoloji inkişaf, qayda dəyişiklikləri və sürücü heyətinin keyfiyyəti ilə sıx əlaqəlidir.
+
+
+
+
+
+<hr class="f1-line">
+
+## Komandalar Üzrə DNF Təhlili
+
+
+```{r constructor_dnf, warning=F, error=F, message=F, fig.width=12, fig.height=5}
+# Komandaların ümumi start sayı
+constructor_starts <- main_tab %>%
+  group_by(name.y) %>%
+  summarise(total_starts = n(), .groups = "drop")
+
+# DNF faizi ilə normalizasiya (min. 100 start)
+constructor_dnf <- main_tab %>%
+  filter(status != "Finished") %>%
+  group_by(name.y) %>%
+  summarise(dnf_count = n(), .groups = "drop") %>%
+  left_join(constructor_starts, by = "name.y") %>%
+  mutate(dnf_rate = round(100 * dnf_count / total_starts, 1)) %>%
+  filter(total_starts >= 100) %>%
+  arrange(desc(dnf_rate)) %>%
+  head(10)
+
+kable(constructor_dnf,
+      col.names = c("Komanda", "DNF sayı", "Ümumi start", "DNF faizi (%)"),
+      caption = "<div style='text-align:center; font-weight:bold; font-size:15px;'>Ən yüksək DNF faizinə malik komandalar (min. 100 start)</div>") %>%
+  kable_styling(bootstrap_options = c("striped", "hover"), full_width = FALSE)
+
+ggplot(constructor_dnf, aes(x = reorder(name.y, dnf_rate), y = dnf_rate)) +
+  geom_col(fill = "#DC0000") +
+  geom_text(aes(label = paste0(dnf_rate, "%")), hjust = -0.2, size = 3.8, fontface = "bold") +
+  coord_flip() +
+  labs(
+    title    = "Ən yüksək DNF faizinə malik komandalar",
+    subtitle = "Min. 100 start şərti ilə, 1950–2024",
+    x        = NULL,
+    y        = "DNF faizi (%)"
+  ) +
+  theme_minimal(base_size = 13) +
+  theme(
+    plot.title         = element_text(hjust = 0.5, face = "bold", size = 14),
+    plot.subtitle      = element_text(hjust = 0.5, color = "gray50", size = 11),
+    panel.grid.minor   = element_blank(),
+    panel.grid.major.y = element_blank()
+  )
+
+# Mütləq say (müqayisə üçün)
+constructor_dnf_raw <- main_tab %>%
+  filter(status != "Finished") %>%
+  group_by(name.y) %>%
+  summarise(dnf_count = n(), .groups = "drop") %>%
+  left_join(constructor_starts, by = "name.y") %>%
+  arrange(desc(dnf_count)) %>%
+  head(10)
+
+kable(constructor_dnf_raw,
+      col.names = c("Komanda", "DNF sayı", "Ümumi start"),
+      caption = "<div style='text-align:center; font-weight:bold; font-size:15px;'>Ən çox DNF olan komandalar (mütləq say)</div>") %>%
+  kable_styling(bootstrap_options = c("striped", "hover"), full_width = FALSE)
+
+constructor_dnf_bottom <- main_tab %>%
+  filter(status != "Finished") %>%
+  group_by(name.y) %>%
+  summarise(dnf_count = n(), .groups = "drop") %>%
+  left_join(constructor_starts, by = "name.y") %>%
+  mutate(dnf_rate = round(100 * dnf_count / total_starts, 1)) %>%
+  filter(total_starts >= 100) %>%
+  arrange(dnf_rate) %>%
+  head(10)
+
+kable(constructor_dnf_bottom,
+      col.names = c("Komanda", "DNF sayı", "Ümumi start", "DNF faizi (%)"),
+      caption = "<div style='text-align:center; font-weight:bold; font-size:15px;'>Ən az DNF faizinə malik komandalar (min. 100 start)</div>") %>%
+  kable_styling(bootstrap_options = c("striped", "hover"), full_width = FALSE)
+```
+
+> **Şərh1:** Komanda DNF analizini həm mütləq say, həm də normalizasiya edilmiş faiz üzrə apardıq. Ferrari 1117 DNF ilə mütləq sayda birinci görünür — amma bu, onun 74 illik Formula 1 tarixinin nəticəsidir. Düzgün müqayisə üçün **DNF faizi** (total start-a nisbəti) istifadə edilir.
+>
+> **Şərh2:** Normalizasiya edilmiş siyahıda 1950–70-ci illərin köhnə komandaları öndədir — texniki etibarsızlıq həmin dövrün xüsusiyyəti idi. Müasir komandalar arasında aşağı DNF faizi texnoloji inkişafın göstəricisidir. Ən az DNF faizinə malik komandalar isə adətən ya müasir dövrdə yarışan, ya da çox yüksək texniki standartları olan kollektivlərdir.
+
+
+
+
+<hr class="f1-line">
+
+# Formula 1-in Tarixi İnkişaf Trendləri
+
+
+
+<hr class="f1-line">
+
+## İllər Üzrə Yarış Sayının Dəyişməsi və COVID-19 Təsiri
+
+
+```{r races_per_year, warning=F, error=F, message=F}
+races_per_year <- main_tab %>%
+  distinct(raceId, year) %>%
+  group_by(year) %>%
+  summarise(race_count = n(), .groups = "drop")
+
+ggplot(races_per_year, aes(x = year, y = race_count)) +
+  geom_line(color = "#3671C6", linewidth = 1.2) +
+  geom_point(color = "#3671C6", size = 1.5) +
+  geom_vline(xintercept = 2020, linetype = "dashed", color = "#DC0000", linewidth = 0.8) +
+  annotate("text", x = 2021, y = max(races_per_year$race_count) - 1,
+           label = "COVID-19 (2020)", color = "#DC0000", size = 3.5, hjust = 0) +
+  scale_x_continuous(breaks = seq(1950, 2025, 5)) +
+  scale_y_continuous(breaks = seq(0, 25, 5)) +
+  labs(
+    title    = "İllər uzre F1 yarış sayı",
+    subtitle = "1950–2024 mövsümləri əsasında",
+    x        = NULL,
+    y        = "Yarış sayı"
+  ) +
+  theme_minimal(base_size = 13) +
+  theme(
+    plot.title       = element_text(hjust = 0.5, face = "bold", size = 14),
+    plot.subtitle    = element_text(hjust = 0.5, color = "gray50", size = 11),
+    panel.grid.minor = element_blank(),
+    axis.text.x      = element_text(angle = 45, hjust = 1)
+  )
+```
+
+> **Şərh:** (İllər Üzrə Formula 1 Yarış Sayının Dəyişməsi)
+Qrafik göstərir ki, Formula 1 təqvimi 1950-ci ildən etibarən davamlı şəkildə genişlənib. İlk mövsümdə cəmi 7 yarış keçirildiyi halda, son illərdə bu rəqəm 24-ə qədər yüksəlib. Bu artım Formula 1-in qlobal populyarlığının və yeni ölkələrin yarış təqviminə qoşulmasının nəticəsidir.
+2020-ci ildə COVID-19 pandemiyası səbəbindən yarışların sayında nəzərəçarpacaq azalma müşahidə olunur. Lakin sonrakı illərdə Formula 1 sürətlə bərpa olunaraq tarixinin ən geniş təqvimlərindən birinə sahib olub.
+Ümumilikdə, təhlil Formula 1-in zaman keçdikcə regional yarış seriyasından qlobal idman platformasına çevrildiyini göstərir.
+
+
+
+
+
+<hr class="f1-line">
+
+## Ölkələr Üzrə Yarışların Paylanması
+
+
+
+```{r races_by_country, warning=F, error=F, message=F}
+races_by_country <- main_tab %>%
+  distinct(raceId, circuitId) %>%
+  left_join(circuits %>% select(circuitId, country), by = "circuitId") %>%
+  group_by(country) %>%
+  summarise(race_count = n(), .groups = "drop") %>%
+  arrange(desc(race_count)) %>%
+  head(15)
+
+kable(races_by_country, caption = "<div style='text-align:center; font-weight:bold; font-size:15px;'>Ən cox yarish kecirilen olkeler</div>") %>%
+  kable_styling(bootstrap_options = c("striped", "hover"), full_width = FALSE)
+
+ggplot(races_by_country, aes(x = reorder(country, race_count), y = race_count)) +
+  geom_col(fill = "#3671C6") +
+  geom_text(aes(label = race_count), hjust = -0.2, size = 3.5, fontface = "bold") +
+  coord_flip() +
+  labs(
+    title    = "Ən cox yarış keçirilən olkeler",
+    subtitle = "Top 15 ölkə, 1950–2024",
+    x        = NULL,
+    y        = "Yarış sayı"
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(
+    plot.title         = element_text(hjust = 0.5, face = "bold", size = 14),
+    plot.subtitle      = element_text(hjust = 0.5, color = "gray50"),
+    panel.grid.minor   = element_blank(),
+    panel.grid.major.y = element_blank()
+  )
+```
+
+> **Şərh:** (Ən Çox Yarış Keçirilən Ölkələr) Formula 1 tarixində ən çox yarış keçirilən ölkə İtaliyadır və ümumilikdə 107 yarışa ev sahibliyi edib. Böyük Britaniya və Almaniya isə 79 yarışla ikinci yeri bölüşür. Bu nəticələr Formula 1-in tarixi inkişafında Avropa ölkələrinin mərkəzi rol oynadığını göstərir.
+ Qrafikdən görünür ki, ilk sıralarda yer alan ölkələrin əksəriyyəti Avropada yerləşir. Sonrakı dövrlərdə ABŞ, Kanada və Yaponiya kimi ölkələrin də təqvimdə mühüm yer tutması Formula 1-in qlobal miqyasda genişlənməsini əks etdirir.
+
+
+
+
+
+<hr class="f1-line">
+
+## Azərbaycan üzrə (Baku Şəhəri)  təhlil (Circuit) 
+
+
+
+
+```{r baku_analysis, warning=F, error=F, message=F}
+
+races_country_year <- main_tab %>%
+  distinct(raceId, year, circuitId) %>%
+  left_join(circuits %>% select(circuitId, country, name), by = "circuitId") %>%
+  arrange(country, year)
+
+baku_analysis <- main_tab %>%
+  filter(raceId %in% (races_country_year %>%
+                        filter(country == "Azerbaijan") %>%
+                        pull(raceId))) %>%
+  filter(grid > 0, positionOrder > 0) %>%
+  mutate(positions_gained = grid - positionOrder)
+
+baku_winners <- baku_analysis %>%
+  filter(positionOrder == 1) %>%
+  mutate(Driver = paste(forename, surname)) %>%
+  select(year, Driver, grid, positionOrder)
+
+kable(baku_winners, caption = "<div style='text-align:center; font-weight:bold; font-size:15px;'>Bakı Qran Prisində qalib suruculer</div>") %>%
+  kable_styling(bootstrap_options = c("striped", "hover"), full_width = FALSE)
+
+baku_pole <- baku_analysis %>%
+  filter(grid == 1) %>%
+  select(year, forename, surname, positionOrder) %>%
+  mutate(won = positionOrder == 1)
+
+kable(baku_pole, caption = "<div style='text-align:center; font-weight:bold; font-size:15px;'>Bakı Qran Prisində Pole Position-un Qelebeye Tesiri</div>") %>%
+  kable_styling(bootstrap_options = c("striped", "hover"), full_width = FALSE)
+```
+
+> **Şərh1:** (Bakı Qran Prisində Qalib Sürücülər) Bakı Şəhər Halqasında qalib gələn sürücülərin start mövqeləri göstərir ki, bu trasda qələbə əldə etmək üçün mütləq pole position-dan başlamaq tələb olunmur. Məsələn, Daniel Ricciardo 2017-ci ildə 10-cu yerdən start alaraq qalib gəlib, Sergio Pérez isə 2021-ci ildə 6-cı yerdən başlayaraq yarışı birinci yerdə tamamlayıb. Bu nəticələr Bakı trasının gözlənilməz və yüksək riskli xarakterini nümayiş etdirir.
+
+> **Şərh2:** (Bakı Qran Prisində Pole Position-un Qələbəyə Təsiri) Təhlil göstərir ki, Bakı Qran Prisində pole position əldə edən sürücülər yalnız 2016 və 2019-cu illərdə qələbə qazana biliblər. Digər illərdə isə pole sahibi sürücülər müxtəlif səbəblərdən yarışı birinci yerdə başa vura bilməyiblər. Bu nəticə göstərir ki, Bakı trasında start üstünlüyü mühüm olsa da, təhlükəsizlik maşını, strategiya qərarları və yarış insidentləri yekun nəticəyə ciddi təsir edir.Pole position-dan start alan sürücülərin yalnız 2-si 8 yarışdan qalib gəlib ki, bu da təxminən 25% qələbə göstəricisi deməkdir. Bu göstərici Formula 1 üzrə ümumi pole-qələbə faizindən xeyli aşağıdır.
+
+
+
+
+<hr class="f1-line">
+
+# Strateji Təhlillər və Əsas Nəticələr
+
+
+
+<hr class="f1-line">
+
+## Pole Position-un Qələbəyə Təsiri
+
+
+```{r pole_win_rate, warning=F, error=F, message=F}
+pole_win_rate <- main_tab %>%
+  filter(grid == 1) %>%
+  summarise(
+    total_poles = n(),
+    wins        = sum(positionOrder == 1),
+    win_rate    = round(100 * wins / total_poles, 1)
+  )
+
+kable(pole_win_rate, caption = "<div style='text-align:center; font-weight:bold; font-size:15px;'>Pole position qelebeye ne qeder tesir edir</div>") %>%
+  kable_styling(bootstrap_options = c("striped", "hover"), full_width = FALSE)
+```
+
+> **Şərh:**  Formula 1 tarixində pole position əldə edən sürücülərin 42.3%-i yarışı qələbə ilə başa vurub. Bu nəticə göstərir ki, startda ilk yerdə olmaq mühüm üstünlük yaratsa da, qələbəyə zəmanət vermir. Yarış strategiyası, pit-stoplar, texniki problemlər və yarışdaxili hadisələr yekun nəticəyə ciddi təsir göstərir.
+
+
+
+
+
+<hr class="f1-line">
+
+
+## Start Mövqeyi və Final Nəticəsi Arasındakı Əlaqə
+
+
+
+```{r grid_correlation, warning=F, error=F, message=F}
+
+#  Korrelyasiya əmsalı
+grid_corr <- main_tab %>%
+  filter(grid > 0, positionOrder > 0) %>%
+  summarise(correlation = round(cor(grid, positionOrder), 3))
+
+kable(grid_corr, caption = "<div style='text-align:center; font-weight:bold; font-size:15px;'>Grid vs Final movqe korrelyasiyasi</div>") %>%
+  kable_styling(bootstrap_options = c("striped", "hover"), full_width = FALSE)
+
+
+
+
+# Qrup üzrə ortalama final mövqe
+
+grid_vs_finish <- main_tab %>%
+  filter(grid > 0, positionOrder > 0) %>%
+  mutate(grid_group = case_when(
+    grid == 1   ~ "1 - Pole",
+    grid <= 3   ~ "2-3 - Front row",
+    grid <= 10  ~ "4-10 - Top 10",
+    TRUE        ~ "11+ - Back"
+  )) %>%
+  group_by(grid_group) %>%
+  summarise(
+    avg_finish = round(mean(positionOrder), 1),
+    race_count = n(),
+    .groups    = "drop"
+  ) %>%
+  mutate(grid_group = factor(grid_group,
+                              levels = c("1 - Pole", "2-3 - Front row",
+                                         "4-10 - Top 10", "11+ - Back"))) %>%
+  arrange(grid_group)
+
+
+
+kable(grid_vs_finish, caption = "<div style='text-align:center; font-weight:bold; font-size:15px;'>Grid qrupu uzre ortalama final movqe</div>") %>%
+  kable_styling(bootstrap_options = c("striped", "hover"), full_width = FALSE)
+
+
+
+main_tab %>%
+  filter(grid > 0, positionOrder > 0, grid <= 20, positionOrder <= 20) %>%
+  ggplot(aes(x = grid, y = positionOrder)) +
+  geom_jitter(alpha = 0.1, size = 0.8, color = "#3671C6") +
+  geom_smooth(method = "lm", color = "#DC0000", linewidth = 1.2, se = FALSE) +
+  scale_x_continuous(breaks = seq(1, 20, 2)) +
+  scale_y_continuous(breaks = seq(1, 20, 2)) +
+  labs(
+    title    = "Grid movqeyi vs Final movqe",
+    subtitle = paste("Korrelyasiya:", grid_corr$correlation),
+    x        = "Grid moveyi",
+    y        = "Final movqe"
+  ) +
+  theme_minimal(base_size = 13) +
+  theme(
+    plot.title       = element_text(hjust = 0.5, face = "bold", size = 14),
+    plot.subtitle    = element_text(hjust = 0.5, color = "gray50"),
+    panel.grid.minor = element_blank()
+  )
+```
+
+
+> **Şərh1:**  "Grid qrupu uzre ortalama final movqe" cədvəlinə əsasən start mövqeyi pisləşdikcə orta final mövqeyi də pisləşir. Pole position-dan başlayan sürücülər yarışı orta hesabla 5.7-ci yerdə bitirdiyi halda, 11-ci və daha aşağı mövqelərdən start alan sürücülərin orta nəticəsi 14.2-ci yer olmuşdur. Bu, start mövqeyinin yarış nəticəsinə əhəmiyyətli təsir göstərdiyini göstərir.
+
+
+> **Şərh2:** "Grid movqeyi vs Final movqe" vizualında Grid mövqeyi ilə final mövqe arasında orta səviyyədə müsbət əlaqə (r = 0.446) müşahidə olunur. Bu nəticə göstərir ki, yarışa ön sıralardan başlayan sürücülər ümumilikdə daha yaxşı nəticə əldə etsələr də, start mövqeyi yekun nəticəni tam müəyyən etmir. Yarış strategiyası, pit-stoplar, texniki problemlər və yarışdaxili hadisələr də mühüm rol oynayır.  Start mövqeyi pisləşdikcə orta final mövqeyi də pisləşir. Pole position-dan başlayan sürücülər yarışı orta hesabla 5.7-ci yerdə bitirdiyi halda, 11-ci və daha aşağı mövqelərdən start alan sürücülərin orta nəticəsi 14.2-ci yer olmuşdur. Bu, start mövqeyinin yarış nəticəsinə əhəmiyyətli təsir göstərdiyini göstərir.
+
+
+
+
+<hr class="f1-line">
+
+
+
+## Dövrələr Üzrə Toplanan Xalların Təhlili
+
+
+
+```{r circuit_points, warning=F, error=F, message=F}
+
+
+# Ən çox xal toplanan dövrə (circuit) hansıdır?
+
+circuit_points <- main_tab %>%
+  left_join(circuits %>% select(circuitId, name, country), by = "circuitId") %>%
+  group_by(name, country) %>%
+  summarise(total_points = sum(points, na.rm = TRUE), .groups = "drop") %>%
+  arrange(desc(total_points)) %>%
+  head(15)
+
+kable(circuit_points, caption = "<div style='text-align:center; font-weight:bold; font-size:15px;'>En cox xal toplanan dovreler</div>") %>%
+  kable_styling(bootstrap_options = c("striped", "hover"), full_width = FALSE)
+
+ggplot(circuit_points, aes(x = reorder(name, total_points), y = total_points)) +
+  geom_col(fill = "#3671C6") +
+  geom_text(aes(label = total_points), hjust = -0.2, size = 3.5, fontface = "bold") +
+  coord_flip() +
+  labs(
+    title    = "En cox xal toplanan dovreler",
+    subtitle = "Top 15 circuit, 1950–2024",
+    x        = NULL,
+    y        = "Umumi xal"
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(
+    plot.title         = element_text(hjust = 0.5, face = "bold", size = 14),
+    plot.subtitle      = element_text(hjust = 0.5, color = "gray50"),
+    panel.grid.minor   = element_blank(),
+    panel.grid.major.y = element_blank()
+  )
+
+
+
+# Ən az xal toplanan dövrə (circuit) hansıdır? 
+
+circuit_points_bottom <- main_tab %>%
+  left_join(circuits %>% select(circuitId, name, country), by = "circuitId") %>%
+  group_by(name, country) %>%
+  summarise(total_points = sum(points, na.rm = TRUE), .groups = "drop") %>%
+  arrange(total_points) %>%
+  head(15)
+
+kable(circuit_points_bottom, caption = "<div style='text-align:center; font-weight:bold; font-size:15px;'>En az xal toplanan dovreler</div>") %>%
+  kable_styling(bootstrap_options = c("striped", "hover"), full_width = FALSE)
+
+```
+
+
+> **Şərh1:** Analiz nəticələrinə əsasən, Formula 1 tarixində ən çox ümumi xal toplanan dövrə Autodromo Nazionale di Monza olmuşdur (3088 xal). Sonrakı yerlərdə Circuit de Monaco (2905.5 xal) və Silverstone Circuit (2798.56 xal) qərarlaşır. Bu dövrələrin yüksək xal göstəriciləri onların Formula 1 təqvimində uzun müddət ərzində müntəzəm şəkildə yer alması ilə əlaqədardır. Siyahıda Avropa ölkələrinin üstünlük təşkil etməsi Formula 1-in tarixi inkişafının əsasən Avropada formalaşdığını göstərir.
+
+
+> **Şərh2:** "En cox xal toplanan dovreler" qrafiki Formula 1 tarixində dövrələr üzrə toplanmış ümumi xalların paylanmasını əks etdirir. Monza dövrəsi ən yüksək göstərici ilə lider mövqedədir. İlk sıralarda yerləşən trasların əksəriyyətinin uzun müddət Formula 1 təqvimində yer alması onların yüksək xal göstəricilərini izah edir. Bu isə yarışların keçirilmə tezliyi ilə ümumi xal göstəricisi arasında müsbət əlaqənin mövcud olduğunu göstərir.
+
+
+> **Şərh3:** Ən az xal toplanan dövrələr cədvəlində analiz nəticələrinə əsasən, Formula 1 tarixində ən az ümumi xal toplayan dövrələr sırasında AVUS (Almaniya), Ain Diab (Mərakeş), Monsanto Park Circuit (Portuqaliya), Pescara Circuit (İtaliya), Riverside International Raceway və Sebring International Raceway (ABŞ) yer alır. Bu dövrələrin hər biri cəmi 24 xal toplamışdır. Aşağı xal göstəricilərinin əsas səbəbi həmin trasların Formula 1 təqvimində çox qısa müddət iştirak etməsi və ya yalnız bir neçə yarışa ev sahibliyi etməsidir. Məsələn, bəzi dövrələr Formula 1 tarixində yalnız bir dəfə istifadə edilmişdir. Bu səbəbdən həmin traslarda keçirilən yarışların sayı az olmuş və nəticədə ümumi xal göstəricisi aşağı səviyyədə qalmışdır. Ümumilikdə nəticələr göstərir ki, dövrənin Formula 1 tarixində topladığı ümumi xal miqdarı onun çempionatda iştirak müddəti və keçirilən yarışların sayı ilə birbaşa əlaqəlidir. Uzun illər təqvimdə yer alan dövrələr yüksək, qısa müddət istifadə olunan dövrələr isə aşağı xal göstəricilərinə malik olmuşdur.
+
+
+
+<hr class="f1-line">
+
+## Pit Stop Strategiyasının Yarış Nəticələrinə Təsiri
+
+
+
+```{r pit_analysis, warning=F, error=F, message=F}
+pit_analysis <- main_tab %>%
+  left_join(
+    pit_stops %>%
+      group_by(raceId, driverId) %>%
+      summarise(pit_count = n(), .groups = "drop"),
+    by = c("raceId", "driverId")
+  ) %>%
+  filter(!is.na(pit_count), positionOrder > 0) %>%
+  group_by(pit_count) %>%
+  summarise(
+    avg_finish = round(mean(positionOrder, na.rm = TRUE), 1),
+    race_count = n(),
+    .groups    = "drop"
+  ) %>%
+  filter(race_count > 50) %>%
+  arrange(pit_count)
+
+kable(pit_analysis, caption = "<div style='text-align:center; font-weight:bold; font-size:15px;'>Pit stop sayi vs ortalama final movqe</div>") %>%
+  kable_styling(bootstrap_options = c("striped", "hover"), full_width = FALSE)
+
+ggplot(pit_analysis, aes(x = factor(pit_count), y = avg_finish)) +
+  geom_col(fill = "#3671C6", width = 0.6) +
+  geom_text(aes(label = avg_finish), vjust = -0.4, size = 4, fontface = "bold") +
+  labs(
+    title    = "Pit stop sayi vs ortalama final movqe",
+    subtitle = "Az pit stop = daha yaxsi neticemi? (2011-2024)",
+    x        = "Pit stop sayi",
+    y        = "Ortalama final movqe"
+  ) +
+  theme_minimal(base_size = 13) +
+  theme(
+    plot.title       = element_text(hjust = 0.5, face = "bold", size = 14),
+    plot.subtitle    = element_text(hjust = 0.5, color = "gray50"),
+    panel.grid.minor = element_blank()
+  )
+```
+
+> **Şərh1:** Cədvəldəki race_count sütunu göstərir ki, 1 və 2 pit stoplu yarışlar ən çox müşahidə olunan hallardır (1854 və 2225 yarış). 5 pit stoplu yarışların sayı isə cəmi 91 olduğu üçün bu kateqoriyanın nəticələrinə ehtiyatla yanaşmaq lazımdır.
+
+> **Şərh2:** "Pit stop sayi vs ortalama final movqe" qrafiki pit stop sayı ilə sürücülərin orta final mövqeyi arasındakı əlaqəni göstərir. 1 və 2 pit stop edən sürücülərin orta final mövqeyi 10.2, 3 pit stopda 10.9, 4 pit stopda 11.0-dır.
+>
+> ⚠️ **Vacib qeyd — kauzallıq istiqaməti:** Bu nəticələrə "az pit stop = yaxşı nəticə" kimi baxmaq yanıltıcıdır. Əsl mexanizm tərsinədir: **yaxşı mövqedə olan sürücülər** yarışı pozacaq əlavə pit stop etməyə ehtiyac duymur, buna görə onların pit stop sayı az çıxır. Yəni **nəticə → pit stop sayını** izah edir, pit stop sayı → nəticəni yox. Doğru analiz üçün Safety Car dövrləri, başlanğıc mövqeyi və şin strategiyası ilə birlikdə baxmaq lazımdır.
+
+
+<hr class="f1-line">
+
+# Əlavə Təhlillər
+
+<hr class="f1-line">
+
+## Dünya Çempionları Sıralaması
+
+```{r world_champions, warning=F, error=F, message=F}
+# drivers_standings-dən yalnız mövsüm sonu birinci olanları götürürük
+world_champions <- drivers_standings %>%
+  left_join(races %>% select(raceId, year, round), by = "raceId") %>%
+  filter(!is.na(year), !is.na(round)) %>%
+  group_by(year) %>%
+  filter(round == max(round, na.rm = TRUE)) %>%
+  ungroup() %>%
+  filter(position == 1) %>%
+  left_join(drivers %>% select(driverId, forename, surname, nationality), by = "driverId") %>%
+  select(year, forename, surname, nationality, points) %>%
+  arrange(year)
+
+# Ən çox çempionluq qazanan sürücülər
+champion_count <- world_champions %>%
+  group_by(forename, surname) %>%
+  summarise(
+    titles      = n(),
+    years       = paste(sort(year), collapse = ", "),
+    .groups     = "drop"
+  ) %>%
+  arrange(desc(titles))
+
+kable(champion_count,
+      col.names = c("Ad", "Soyad", "Çempionluq sayı", "Çempion olduğu illər"),
+      caption = "<div style='text-align:center; font-weight:bold; font-size:15px;'>Formula 1 Dünya Çempionları — Çempionluq sayına görə</div>") %>%
+  kable_styling(bootstrap_options = c("striped", "hover"), full_width = FALSE)
+
+ggplot(champion_count %>% filter(titles >= 2),
+       aes(x = reorder(paste(forename, surname), titles), y = titles)) +
+  geom_col(fill = "#FFD700", color = "#B8860B", linewidth = 0.5) +
+  geom_text(aes(label = titles), hjust = -0.3, size = 4, fontface = "bold") +
+  coord_flip() +
+  labs(
+    title    = "Birdən çox çempionluğu olan sürücülər",
+    subtitle = "1950–2024 mövsümləri əsasında",
+    x        = NULL,
+    y        = "Çempionluq sayı"
+  ) +
+  theme_minimal(base_size = 13) +
+  theme(
+    plot.title         = element_text(hjust = 0.5, face = "bold", size = 14),
+    plot.subtitle      = element_text(hjust = 0.5, color = "gray50", size = 11),
+    panel.grid.minor   = element_blank(),
+    panel.grid.major.y = element_blank()
+  )
+```
+
+> **Şərh:** Dünya çempionluğu yarış qələbəsindən fərqli bir göstəricidir — mövsüm boyunca ardıcıl yüksək nəticə tələb edir. Michael Schumacher (7) və Lewis Hamilton (7) bərabər rekordla bu siyahının başında yer alır. Ayrton Senna (3), Alain Prost (4) və Sebastian Vettel (4) də çoxsaylı çempionluqları ilə F1 tarixinin ən dominant sürücüləri sırasındadır.
+>
+> Max Verstappen 2021-ci ildən etibarən ardıcıl çempionluqlar qazanaraq bu elitaya qoşulmuşdur. Çempionluq sayı ilə yarış qələbəsi sayını müqayisə etmək maraqlıdır: məsələn, bir sürücü çox qalibiyyət qazana bilər amma mövsüm boyu sabit nəticə göstərə bilmədiyinə görə çempion olmaya bilər.
+
+
+<hr class="f1-line">
+
+## Sürücü Yaşı və Performans Əlaqəsi
+
+```{r age_performance, warning=F, error=F, message=F}
+# Hər yarışda sürücünün yaşını hesablayırıq
+age_performance <- main_tab %>%
+  filter(!is.na(dob), !is.na(date), positionOrder > 0, positionOrder <= 20) %>%
+  mutate(age_at_race = as.numeric(difftime(date, dob, units = "days")) / 365.25) %>%
+  filter(age_at_race >= 16, age_at_race <= 55) %>%
+  mutate(age_group = floor(age_at_race))
+
+# Yaş qrupu üzrə orta final mövqe
+age_avg <- age_performance %>%
+  mutate(age_bracket = case_when(
+    age_at_race < 22 ~ "18–21",
+    age_at_race < 25 ~ "22–24",
+    age_at_race < 28 ~ "25–27",
+    age_at_race < 31 ~ "28–30",
+    age_at_race < 34 ~ "31–33",
+    age_at_race < 37 ~ "34–36",
+    TRUE             ~ "37+"
+  )) %>%
+  group_by(age_bracket) %>%
+  summarise(
+    avg_position = round(mean(positionOrder), 2),
+    race_count   = n(),
+    avg_points   = round(mean(points, na.rm = TRUE), 2),
+    .groups      = "drop"
+  ) %>%
+  mutate(age_bracket = factor(age_bracket,
+    levels = c("18–21","22–24","25–27","28–30","31–33","34–36","37+")))
+
+kable(age_avg,
+      col.names = c("Yaş qrupu", "Orta final mövqe", "Yarış sayı", "Orta xal"),
+      caption = "<div style='text-align:center; font-weight:bold; font-size:15px;'>Yaş qrupu üzrə orta performans</div>") %>%
+  kable_styling(bootstrap_options = c("striped", "hover"), full_width = FALSE)
+
+ggplot(age_avg, aes(x = age_bracket, y = avg_position, group = 1)) +
+  geom_line(color = "#3671C6", linewidth = 1.3) +
+  geom_point(color = "#3671C6", size = 3) +
+  geom_text(aes(label = avg_position), vjust = -0.8, size = 3.5, fontface = "bold") +
+  labs(
+    title    = "Sürücü yaşı ilə orta final mövqeyi arasındakı əlaqə",
+    subtitle = "Yaş qrupu üzrə, 1950–2024 (aşağı = daha yaxşı)",
+    x        = "Yaş qrupu",
+    y        = "Orta final mövqe"
+  ) +
+  theme_minimal(base_size = 13) +
+  theme(
+    plot.title       = element_text(hjust = 0.5, face = "bold", size = 14),
+    plot.subtitle    = element_text(hjust = 0.5, color = "gray50", size = 11),
+    panel.grid.minor = element_blank()
+  )
+
+# Rekord: Ən gənc / Ən yaşlı qalib
+youngest_winner <- age_performance %>%
+  filter(positionOrder == 1) %>%
+  arrange(age_at_race) %>%
+  slice(1) %>%
+  mutate(Driver = paste(forename, surname),
+         age_display = round(age_at_race, 1)) %>%
+  select(Driver, year, age_display)
+
+oldest_winner <- age_performance %>%
+  filter(positionOrder == 1) %>%
+  arrange(desc(age_at_race)) %>%
+  slice(1) %>%
+  mutate(Driver = paste(forename, surname),
+         age_display = round(age_at_race, 1)) %>%
+  select(Driver, year, age_display)
+
+kable(rbind(
+  data.frame(Rekord = "Ən gənc qalib", youngest_winner),
+  data.frame(Rekord = "Ən yaşlı qalib", oldest_winner)
+),
+col.names = c("Rekord", "Sürücü", "İl", "Yaş"),
+caption = "<div style='text-align:center; font-weight:bold; font-size:15px;'>Yaş rekordları</div>") %>%
+  kable_styling(bootstrap_options = c("striped", "hover"), full_width = FALSE)
+```
+
+> **Şərh:** Yaş-performans əlaqəsi göstərir ki, 25–33 yaş aralığı Formula 1-də "peak" dövr hesab olunur — sürücülər həm texniki sürüşü mənimsəmiş, həm də fiziki zirvədədirlər. 18–21 yaş qrupu gənc pilotların uyum dövrünü, 37+ qrupu isə yaşlı sürücülərin mövqe itkisini əks etdirir. Ən gənc qalib rekordu Max Verstappenə (18 yaş) aiddir.
+
+<hr class="f1-line">
+
+## Fastest Lap Analizi
+
+```{r fastest_lap_analysis, warning=F, error=F, message=F}
+# Ən çox fastest lap qazanan sürücülər
+fastest_lap_drivers <- main_tab %>%
+  filter(!is.na(rank), rank == 1) %>%    # rank == 1 → fastest lap sahibi
+  group_by(forename, surname) %>%
+  summarise(fastest_laps = n(), .groups = "drop") %>%
+  arrange(desc(fastest_laps)) %>%
+  head(10)
+
+kable(fastest_lap_drivers,
+      col.names = c("Ad", "Soyad", "Fastest Lap sayı"),
+      caption = "<div style='text-align:center; font-weight:bold; font-size:15px;'>Ən çox Fastest Lap qazanan sürücülər</div>") %>%
+  kable_styling(bootstrap_options = c("striped", "hover"), full_width = FALSE)
+
+ggplot(fastest_lap_drivers,
+       aes(x = reorder(paste(forename, surname), fastest_laps), y = fastest_laps)) +
+  geom_col(fill = "#9B59B6") +
+  geom_text(aes(label = fastest_laps), hjust = -0.2, size = 3.8, fontface = "bold") +
+  coord_flip() +
+  labs(
+    title    = "Ən çox Fastest Lap qazanan sürücülər",
+    subtitle = "1950–2024 mövsümləri əsasında",
+    x        = NULL,
+    y        = "Fastest Lap sayı"
+  ) +
+  theme_minimal(base_size = 13) +
+  theme(
+    plot.title         = element_text(hjust = 0.5, face = "bold", size = 14),
+    plot.subtitle      = element_text(hjust = 0.5, color = "gray50", size = 11),
+    panel.grid.minor   = element_blank(),
+    panel.grid.major.y = element_blank()
+  )
+
+# Fastest Lap sahibi yarışı qalib bitirir?
+fl_win_rate <- main_tab %>%
+  filter(!is.na(rank), rank == 1) %>%
+  summarise(
+    total_fl   = n(),
+    also_won   = sum(positionOrder == 1),
+    fl_win_pct = round(100 * also_won / total_fl, 1)
+  )
+
+kable(fl_win_rate,
+      col.names = c("Ümumi Fastest Lap", "Həm FL həm qalib", "Qələbə faizi (%)"),
+      caption = "<div style='text-align:center; font-weight:bold; font-size:15px;'>Fastest Lap sahibinin yarışı qazanma faizi</div>") %>%
+  kable_styling(bootstrap_options = c("striped", "hover"), full_width = FALSE)
+
+# Ən yüksək orta fastest lap sürəti (fastestLapSpeed)
+avg_speed_drivers <- main_tab %>%
+  filter(!is.na(fastestLapSpeed), fastestLapSpeed > 0) %>%
+  group_by(forename, surname) %>%
+  summarise(
+    avg_speed  = round(mean(fastestLapSpeed, na.rm = TRUE), 1),
+    race_count = n(),
+    .groups    = "drop"
+  ) %>%
+  filter(race_count >= 20) %>%
+  arrange(desc(avg_speed)) %>%
+  head(10)
+
+kable(avg_speed_drivers,
+      col.names = c("Ad", "Soyad", "Orta FL sürəti (km/h)", "Yarış sayı"),
+      caption = "<div style='text-align:center; font-weight:bold; font-size:15px;'>Ən yüksək orta Fastest Lap sürətinə malik sürücülər (min. 20 yarış)</div>") %>%
+  kable_styling(bootstrap_options = c("striped", "hover"), full_width = FALSE)
+```
+
+> **Şərh:** Fastest Lap — yarış ərzində ən sürətli dövrəni vuran sürücüyə verilən statistik göstəricidir (2019-dan etibarən 1 əlavə xal da verilir). Lewis Hamilton və Michael Schumacher bu siyahıda da lider mövqedədir — bu, onların yarışlarda təkcə mövqe deyil, sürət baxımından da üstünlüklərini göstərir.
+>
+> Fastest Lap sahibinin eyni zamanda yarışı qazanma faizinə baxmaq maraqlıdır: əgər bu faiz yüksəkdirsə, FL dominant sürücülərin əldə etdiyi üçün mənasızlaşır; əgər aşağıdırsa, strategiya yarışlarında fərqli sürücülər FL qazanır deməkdir.
+
+<hr class="f1-line">
+
+## Qualifying → Yarış Nəticəsi Əlaqəsi
+
+```{r qualifying_analysis, warning=F, error=F, message=F}
+# Qualifying məlumatlarını main_tab ilə birləşdiririk
+qual_race <- qualifying %>%
+  select(raceId, driverId, position) %>%
+  rename(qual_position = position) %>%
+  left_join(
+    main_tab %>% select(raceId, driverId, positionOrder, points),
+    by = c("raceId", "driverId")
+  ) %>%
+  filter(!is.na(qual_position), !is.na(positionOrder),
+         qual_position > 0, positionOrder > 0)
+
+# Korrelyasiya
+qual_corr <- cor(qual_race$qual_position, qual_race$positionOrder) %>%
+  round(3)
+
+# Qualifying qrupu üzrə orta yarış nəticəsi
+qual_group_avg <- qual_race %>%
+  mutate(qual_group = case_when(
+    qual_position == 1 ~ "1 - Pole",
+    qual_position <= 3 ~ "2–3",
+    qual_position <= 6 ~ "4–6",
+    qual_position <= 10 ~ "7–10",
+    qual_position <= 15 ~ "11–15",
+    TRUE               ~ "16+"
+  )) %>%
+  group_by(qual_group) %>%
+  summarise(
+    avg_race_pos = round(mean(positionOrder), 1),
+    avg_points   = round(mean(points, na.rm = TRUE), 2),
+    race_count   = n(),
+    .groups      = "drop"
+  ) %>%
+  mutate(qual_group = factor(qual_group,
+    levels = c("1 - Pole","2–3","4–6","7–10","11–15","16+"))) %>%
+  arrange(qual_group)
+
+kable(qual_group_avg,
+      col.names = c("Qualifying mövqesi", "Orta yarış mövqesi", "Orta xal", "Yarış sayı"),
+      caption = "<div style='text-align:center; font-weight:bold; font-size:15px;'>Qualifying mövqesi üzrə orta yarış nəticəsi</div>") %>%
+  kable_styling(bootstrap_options = c("striped", "hover"), full_width = FALSE)
+
+ggplot(qual_race %>% filter(qual_position <= 20, positionOrder <= 20),
+       aes(x = qual_position, y = positionOrder)) +
+  geom_jitter(alpha = 0.08, size = 0.7, color = "#3671C6") +
+  geom_smooth(method = "lm", color = "#DC0000", linewidth = 1.3, se = FALSE) +
+  scale_x_continuous(breaks = seq(1, 20, 2)) +
+  scale_y_continuous(breaks = seq(1, 20, 2)) +
+  labs(
+    title    = "Qualifying mövqesi vs Yarış nəticəsi",
+    subtitle = paste("Korrelyasiya:", qual_corr, "| Qualifying cədvəlinə daxil olan yarışlar"),
+    x        = "Qualifying mövqesi",
+    y        = "Yarış final mövqesi"
+  ) +
+  theme_minimal(base_size = 13) +
+  theme(
+    plot.title       = element_text(hjust = 0.5, face = "bold", size = 14),
+    plot.subtitle    = element_text(hjust = 0.5, color = "gray50", size = 11),
+    panel.grid.minor = element_blank()
+  )
+
+# Q1/Q2/Q3 zamanları olan yarışlarda sürətin yarış nəticəsinə təsiri
+q3_analysis <- qualifying %>%
+  filter(!is.na(q3)) %>%
+  mutate(q3_seconds = {
+    parts <- strsplit(q3, ":")
+    sapply(parts, function(x) {
+      if (length(x) == 2) as.numeric(x[1]) * 60 + as.numeric(x[2])
+      else NA_real_
+    })
+  }) %>%
+  filter(!is.na(q3_seconds)) %>%
+  left_join(main_tab %>% select(raceId, driverId, positionOrder), by = c("raceId","driverId")) %>%
+  filter(!is.na(positionOrder))
+
+if(nrow(q3_analysis) > 100) {
+  q3_corr <- cor(q3_analysis$q3_seconds, q3_analysis$positionOrder, use = "complete.obs") %>% round(3)
+  cat("Q3 zamanı ilə yarış nəticəsi korrelyasiyası:", q3_corr, "\n")
+}
+```
+
+> **Şərh:** Qualifying ilə yarış nəticəsi arasındakı korrelyasiya `grid vs positionOrder` analizindən daha güclü olmalıdır — çünki qualifying zamanları sürücünün həqiqi sürətini daha dəqiq ölçür, start reaksiyası kimi xarici amilləri istisna edir.
+>
+> Qualifying mövqesi üzrə qruplaşdırma göstərir ki, pole position sahibi orta hesabla ən yaxşı yarış mövqeyini qazanır. Lakin 7–10-cu qualifying mövqelərindən gələn sürücülərin nəticəsi ilə 4–6-cı arasındakı fərq kiçikdirsə, bu "midfield" qrupunun yarış ərzində bir-birini geçməyə daha çox meyllidir deməkdir.
+
