@@ -79,6 +79,26 @@ Technical highlights:
 - The HTML report can be viewed directly in any browser without R installed
 - All local file paths in the .Rmd have been replaced with relative paths in the published version
 
+# Dashboard Preview
 
+### Home Dashboard
+![Home 1](screenshots/Screenshot%202026-06-19%20182404.png)
+
+![Home 2](screenshots/Screenshot%202026-06-19%20182538.png)
+
+### Driver Analysis
+![Driver 1](screenshots/Screenshot%202026-06-19%20182439.png)
+
+![Driver 2](screenshots/Screenshot%202026-06-19%20182502.png)
+
+### Team Analysis
+![Team](screenshots/Screenshot%202026-06-19%20182600.png)
+
+### Circuit Analysis
+![Circuit 1](screenshots/Screenshot%202026-06-19%20182641.png)
+
+![Circuit 2](screenshots/Screenshot%202026-06-19%20182700.png)
+
+![Circuit 3](screenshots/Screenshot%202026-06-19%20182712.png)
 
 
